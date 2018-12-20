@@ -98,7 +98,7 @@ namespace BlockRenderTest
                                 ? LineSegment.Split('/')[1].Trim('"')   //If true
                                 : @"JAR\" + LineSegment.Trim('"');      //If false
                         }
-                        break;  //This statement merely tells the code "Yo, you just got all the data. You can go back to other stuff now."
+                        yield break;  //This statement merely tells the code "Yo, you just got all the data. You can go back to other stuff now."
                     }
                 }
                 /*

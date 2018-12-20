@@ -46,9 +46,16 @@ namespace BlockRenderTest
     {
         public string Path;
 
+        public Dictionary<string, string> ModelData;
+
         public ModelReference(string ModelPath)
         {
             Path = ModelPath;
+        }
+
+        public ModelReference(Dictionary<string,string> DictionaryData)
+        {
+            ModelData = DictionaryData;
         }
     }
 }
