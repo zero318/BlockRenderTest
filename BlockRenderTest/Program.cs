@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+//using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
@@ -8,8 +9,11 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Threading.Tasks;
-using ICSharpCode.SharpZipLib.Zip;
+//using ICSharpCode.SharpZipLib.Zip;
 using System.IO;
+using System.IO.Compression;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace BlockRenderTest
 {
@@ -38,10 +42,113 @@ namespace BlockRenderTest
                         ResourcePacks.Add(new ResourcePack(PackName.Split('\\')[1] + "_" + SplitJarPath[SplitJarPath.Length - 1], MinecraftJarPath));
                     }
                 }
-
-                foreach (ResourcePack Pack in ResourcePacks)
+                List<Block> Blocks = new List<Block>();
+                //List<BlockState> BlockStates = new List<BlockState>();
+                using (ZipArchive MinecraftJar = ZipFile.OpenRead(MinecraftJarPath))
                 {
-                    Console.WriteLine(Pack.Name + " " + Pack.Path + " " + Pack.Type.ToString());
+                    IEnumerable<ZipArchiveEntry> BlockStateEntries = MinecraftJar.Entries.Where(Entry => (Entry.Name.EndsWith(".json")) && (Entry.FullName.EndsWith(@"minecraft/blockstates/" + Entry.Name)));
+                    //JsonSerializerSettings JsonSettings = new JsonSerializerSettings
+                    //{
+                    //    CheckAdditionalContent = true
+                    //};
+                    //dynamic JsonOutput;
+                    //var variants
+                    foreach (ZipArchiveEntry Entry in BlockStateEntries)
+                    {
+                        List<BlockState> BlockStates = new List<BlockState>();
+                        List<Model> ModelList = new List<Model>();
+                        using (StreamReader sr = new StreamReader(Entry.Open()))
+                        {
+                            try
+                            {
+                                JObject JsonOutput = JObject.Parse(sr.ReadToEnd());
+                                foreach (KeyValuePair<string, JToken> Token in JsonOutput)
+                                {
+                                    if (Token.Key == "variants")
+                                    {
+                                        Console.WriteLine(Token.Key);
+                                        foreach (KeyValuePair<string, JToken> Variants in Token.Value.ToObject<JObject>())
+                                        {
+                                            BlockStates = new List<BlockState>();
+                                            foreach (KeyValuePair<string, JToken> StateToken in Variants.Value.ToObject<JObject>())
+                                            {
+                                                ModelList = new List<Model>();
+                                                foreach (JToken ModelToken in StateToken.Value)
+                                                {
+                                                    foreach (JToken Model in ModelToken)
+                                                    {
+                                                        ModelList.Add(new Model(Model.Value<string>()));
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        //foreach (JToken Variants in Token.Value)
+                                        //{
+                                        //    BlockStates = new List<BlockState>();
+                                        //    foreach (JToken StateToken in Variants)
+                                        //    {
+                                        //        ModelList = new List<Model>();
+                                        //        foreach (JToken ModelToken in StateToken)
+                                        //        {
+                                        //            foreach (JToken Model in ModelToken)
+                                        //            {
+                                        //                ModelList.Add(new Model(Model.Value<string>()));
+                                        //            }
+                                        //        }
+                                        //        StateToken.ToObject<JObject>();
+                                        //    }
+                                        //    BlockStates.Add(new BlockState(Variants.Value<string>(), ModelList));
+                                        //}
+
+                                    }
+                                }
+
+                                //foreach ()
+                                //JsonOutput = JsonConvert.DeserializeObject<dynamic>(sr.ReadToEnd());
+                                //dynamic variants = JsonOutput.variants;
+                                //////dynamic variant1 = variants.;
+                                //foreach (dynamic Token in variants.Children())
+                                //{
+                                ////    foreach (dynamic Value in Token.Value)
+                                ////    {
+
+                                ////    }
+                                ////    //BlockState.AddVariant(Token.Name, );
+                                //}
+                                //NestLoop(JsonOutput);
+
+                                //foreach(var)
+                                //BlockStates.Add(JsonConvert.DeserializeObject<BlockState>(sr.ReadToEnd()));
+                                //Blocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
+                                Console.Write("");
+                            }
+                            catch
+                            {
+                                Console.Write("");
+                                //For some reason Mojang has a crappy blockstate for acacia_wall_sign. It has a random 'n' after all the data, which gives my code AIDS. :P
+                            }
+                        }
+                    }
+                }
+
+                foreach (Block block in Blocks)
+                {
+                    foreach (BlockState State in block.BlockStates)
+                    {
+                        foreach (object data in State.variants)
+                        {
+                            Console.WriteLine(block.Name);
+                            Console.WriteLine(data.ToString());
+                        }
+                    }
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("Done");
+                while (true)
+                {
+
                 }
             }
             else
@@ -51,11 +158,25 @@ namespace BlockRenderTest
                 Console.WriteLine("2. Location of Minecraft .jar");
                 Console.WriteLine("3. Output Directory");
             }
-            Console.WriteLine();
-            Console.WriteLine("Done");
-            while (true)
-            {
+            //Console.WriteLine();
+            //Console.WriteLine("Done");
+            //while (true)
+            //{
                 
+            //}
+        }
+
+        static void NestLoop(dynamic Input)
+        {
+            if (Input.HasValues)
+            {
+                foreach (dynamic Token in Input.ChildrenTokens)
+                {
+                    NestLoop(Token);
+                }
+            } else
+            {
+                Console.WriteLine(Input.Value);
             }
         }
 
@@ -116,6 +237,49 @@ namespace BlockRenderTest
                 default:
                     return PackPath;
             }
+        }
+    }
+
+    public class Block
+    {
+        public string Name;
+        public List<BlockState> BlockStates = new List<BlockState>();
+
+        public Block(string BlockName, List<BlockState> States)
+        {
+            Name = BlockName;
+            BlockStates = States;
+        }
+    }
+
+    public class BlockState
+    {
+        public string Name;
+        public List<Model> Models = new List<Model>();
+
+        public IList<object> variants;
+        public IDictionary<string, List<Model>> Variants;
+
+        public void AddVariant(string Name, List<Model> InputModel)
+        {
+            Variants.Add(Name, InputModel);
+        }
+
+        public BlockState(string BlockStateName, List<Model> BlockStateModels)
+        {
+            Name = BlockStateName;
+            Models = BlockStateModels;
+        }
+    }
+
+    public class Model
+    {
+        public string Name;
+        public string Path;
+
+        public Model(string ModelPath)
+        {
+            Path = ModelPath;
         }
     }
 }
