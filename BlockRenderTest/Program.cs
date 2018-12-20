@@ -19,16 +19,36 @@ namespace BlockRenderTest
 {
     class Program
     {
-        static void Main(string[] args)
+        /*
+        This project is a command line application! That means instead of screwing with a GUI, it's
+        meant to be used as part of a batch script. In order to do that, the program will have arguments
+        passed to it. Once finished, it will hopefully be using somewhat like this:
+
+        BlockRenderTest "F:\My Minecraft Expansion\.minecraft" "C:\Users\zero318\AppData\Roaming\.minecraft\versions\18w50a\18w50a.jar" "F:\My Minecraft Expansion\_BlockRenderTempDirectory"
+
+        What that does in a command line environment is feed external data into the program. Notice how
+        the three things are separated with quotes and spaces? That's how the program is able to tell each
+        argument apart.
+        */
+        static void Main(string[] args) //<-- In C#, the program always starts at Main()
         {
             if (args.Length >= 3)
             {
-                string MinecraftPath = args[0];
-                string MinecraftJarPath = args[1];
-                string OutputDirectory = args[2];
+                string MinecraftPath = args[0];     //"F:\My Minecraft Expansion\.minecraft"
+                string MinecraftJarPath = args[1];  //"C:\Users\zero318\AppData\Roaming\.minecraft\versions\18w50a\18w50a.jar"
+                string OutputDirectory = args[2];   //"F:\My Minecraft Expansion\_BlockRenderTempDirectory"
 
                 string OptionsPath = MinecraftPath + @"\options.txt";
-                string[] PackList = GetResourcePacks(OptionsPath).ToArray();
+                /*
+                This function is *really* important! Rather than just blindly load every resource pack in
+                the folder (because some people like myself have 50 or something stupid), this function loads
+                the list of currently enabled resource packs from Minecraft itself. :D
+
+                The code of the 
+                */
+                string[] PackList = ResourcePack.GetResourcePacks(OptionsPath).ToArray();
+                
+                
                 //string[] PackList = GetResourcePacks(OptionsPath).Reverse().ToArray();
                 List<ResourcePack> ResourcePacks = new List<ResourcePack>();
                 foreach (string PackName in PackList)
@@ -42,21 +62,20 @@ namespace BlockRenderTest
                         ResourcePacks.Add(new ResourcePack(PackName.Split('\\')[1] + "_" + SplitJarPath[SplitJarPath.Length - 1], MinecraftJarPath));
                     }
                 }
-                List<Block> Blocks = new List<Block>();
-                //List<BlockState> BlockStates = new List<BlockState>();
+                List<Block> Blocks = new List<Block>(); //This list has to be declared outside of the using block so that it can be referenced later
                 using (ZipArchive MinecraftJar = ZipFile.OpenRead(MinecraftJarPath))
                 {
                     IEnumerable<ZipArchiveEntry> BlockStateEntries = MinecraftJar.Entries.Where(Entry => (Entry.Name.EndsWith(".json")) && (Entry.FullName.EndsWith(@"minecraft/blockstates/" + Entry.Name)));
-                    //JsonSerializerSettings JsonSettings = new JsonSerializerSettings
-                    //{
-                    //    CheckAdditionalContent = true
-                    //};
-                    //dynamic JsonOutput;
-                    //var variants
                     foreach (ZipArchiveEntry Entry in BlockStateEntries)
                     {
-                        List<BlockState> BlockStates = new List<BlockState>();
-                        List<Model> ModelList = new List<Model>();
+                        /*
+                        This whole section is just a tangled mess to parse the blockstate JSON files.
+                        
+                        Rather than even try to parse the JSON myself with string operators (cancer),
+                        I decided to use an external function library.
+                        */
+                        List<BlockState> BlockStates = new List<BlockState>();          //Generate the lists
+                        List<ModelReference> ModelList = new List<ModelReference>();    //before using them
                         using (StreamReader sr = new StreamReader(Entry.Open()))
                         {
                             try
@@ -66,80 +85,68 @@ namespace BlockRenderTest
                                 {
                                     if (Token.Key == "variants")
                                     {
-                                        Console.WriteLine(Token.Key);
-                                        foreach (KeyValuePair<string, JToken> Variants in Token.Value.ToObject<JObject>())
+                                        BlockStates = new List<BlockState>();
+                                        foreach (JToken Variants in Token.Value)
                                         {
-                                            BlockStates = new List<BlockState>();
-                                            foreach (KeyValuePair<string, JToken> StateToken in Variants.Value.ToObject<JObject>())
+                                            foreach (JToken StateToken in Variants.Values<JToken>())
                                             {
-                                                ModelList = new List<Model>();
-                                                foreach (JToken ModelToken in StateToken.Value)
+                                                ModelList = new List<ModelReference>();
+                                                foreach (JToken ModelToken in StateToken.Children())
                                                 {
-                                                    foreach (JToken Model in ModelToken)
-                                                    {
-                                                        ModelList.Add(new Model(Model.Value<string>()));
-                                                    }
+                                                    string Model = ModelToken.ToObject<string>();
+                                                    ModelList.Add(new ModelReference(Model));
                                                 }
+                                                BlockStates.Add(new BlockState(Variants.ToObject<JProperty>().Name, ModelList));
                                             }
+                                            
                                         }
-
-                                        //foreach (JToken Variants in Token.Value)
-                                        //{
-                                        //    BlockStates = new List<BlockState>();
-                                        //    foreach (JToken StateToken in Variants)
-                                        //    {
-                                        //        ModelList = new List<Model>();
-                                        //        foreach (JToken ModelToken in StateToken)
-                                        //        {
-                                        //            foreach (JToken Model in ModelToken)
-                                        //            {
-                                        //                ModelList.Add(new Model(Model.Value<string>()));
-                                        //            }
-                                        //        }
-                                        //        StateToken.ToObject<JObject>();
-                                        //    }
-                                        //    BlockStates.Add(new BlockState(Variants.Value<string>(), ModelList));
-                                        //}
-
+                                        Blocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
                                     }
                                 }
-
-                                //foreach ()
-                                //JsonOutput = JsonConvert.DeserializeObject<dynamic>(sr.ReadToEnd());
-                                //dynamic variants = JsonOutput.variants;
-                                //////dynamic variant1 = variants.;
-                                //foreach (dynamic Token in variants.Children())
-                                //{
-                                ////    foreach (dynamic Value in Token.Value)
-                                ////    {
-
-                                ////    }
-                                ////    //BlockState.AddVariant(Token.Name, );
-                                //}
-                                //NestLoop(JsonOutput);
-
-                                //foreach(var)
-                                //BlockStates.Add(JsonConvert.DeserializeObject<BlockState>(sr.ReadToEnd()));
-                                //Blocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
-                                Console.Write("");
                             }
                             catch
                             {
-                                Console.Write("");
                                 //For some reason Mojang has a crappy blockstate for acacia_wall_sign. It has a random 'n' after all the data, which gives my code AIDS. :P
                             }
                         }
                     }
+
+                    List<ZipArchiveEntry> BlockModelEntries = new List<ZipArchiveEntry>();
+
+                    foreach (Block block in Blocks)
+                    {
+                        BlockModelEntries.Add(MinecraftJar.GetEntry("assets/minecraft/models/" + block.BlockStates[0].Models[0].Path + ".json"));
+                    }
+
+                    BlockModelEntries = BlockModelEntries.Distinct().ToList();
+
+                    List<BlockModel> BlockModels = new List<BlockModel>();
+
+                    foreach (ZipArchiveEntry Entry in BlockModelEntries)
+                    {
+
+                    }
+
+
+                    Console.Write("");
+
+                    //IEnumerable<ZipArchiveEntry> BlockModelEntries = MinecraftJar.Entries.Where(Entry => (Entry.Name.EndsWith(".json")) && (Entry.FullName.EndsWith(@"minecraft/models/block/" + Entry.Name)));
+                    //foreach (ZipArchiveEntry Entry in BlockModelEntries)
+                    //{
+
+                    //}
+
                 }
 
                 foreach (Block block in Blocks)
                 {
+                    Console.WriteLine(block.Name);
                     foreach (BlockState State in block.BlockStates)
                     {
-                        foreach (object data in State.variants)
+                        Console.WriteLine(State.Name);
+                        foreach (ModelReference Model in State.Models)
                         {
-                            Console.WriteLine(block.Name);
-                            Console.WriteLine(data.ToString());
+                            Console.WriteLine(Model.Path);
                         }
                     }
                 }
@@ -166,41 +173,9 @@ namespace BlockRenderTest
             //}
         }
 
-        static void NestLoop(dynamic Input)
-        {
-            if (Input.HasValues)
-            {
-                foreach (dynamic Token in Input.ChildrenTokens)
-                {
-                    NestLoop(Token);
-                }
-            } else
-            {
-                Console.WriteLine(Input.Value);
-            }
-        }
 
-        static IEnumerable<string> GetResourcePacks(string OptionsPath)
-        {
-            using (StreamReader sr = new StreamReader(OptionsPath))
-            {
-                char[] RemoveChars = { '[', ']'};
-                string Line;
-                string[] LineParts;
-                while(!sr.EndOfStream)
-                {
-                    Line = sr.ReadLine();
-                    if (!string.IsNullOrEmpty((LineParts = Line.StartsWith("resourcePacks") ? Line.Split(':')[1].Trim(RemoveChars).Split(',') : null)?[0]))
-                    {
-                        foreach(string stringy in LineParts)
-                        {
-                            yield return stringy.Contains('/') ? stringy.Split('/')[1].Trim('"') : @"JAR\" + stringy.Trim('"');
-                        }
-                        break;
-                    }
-                }
-            }
-        }
+
+        
     }
 
     public class ResourcePack
@@ -238,6 +213,56 @@ namespace BlockRenderTest
                     return PackPath;
             }
         }
+
+        public static IEnumerable<string> GetResourcePacks(string OptionsPath)
+        {
+            /*
+            StreamReader is the glorious thing that can read the contents of external files.
+
+            Every time "sr.ReadLine()" is run, the StreamReader will retrievea new line from the
+            file as a string. I then use some fancy string operators to parse out the data I want.
+            */
+            using (StreamReader sr = new StreamReader(OptionsPath))
+            {
+                char[] RemoveChars = { '[', ']' };  //Declaring this out here prevents some derpy syntax errors.
+                string Line;
+                string[] LineSplits;
+                while (!sr.EndOfStream)
+                {
+                    /*
+                    I have to use a temporary variable here since calling sr.ReadLine() multiple times
+                    in the following if statement would end up reading multiple different lines into
+                    the condition rather than referencing the same line multiple times.
+                    */
+                    Line = sr.ReadLine();
+                    /*
+                    I'll freely admit, this part of the code is a mess. I was messing around with
+                    the "conditional operator", which is what all that weird ? : stuff is. The code is almost
+                    unreadable because of it though, so I'm not impressed. Here's a link if you want to read
+                    about it: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/operators/conditional-operator
+
+                    Anyway, all that this section does is read each line of the options file to see if
+                    it starts with "resourcePacks" since that's the line we're interested in.
+
+                    Here's an example of the resourcePacks line:
+                    resourcePacks:["file/ZeroServerSoundPack13","file/ToxicCavesTextures","vanilla","file/1.13.2_Default_Textures","file/CleaverPack3","file/HighContrastMaps","file/No_Vignette","file/No_Underwater_Vignette"]
+                    
+                    Once it finds that line, it splits it at the colon to separate out the data,
+                    removes the brackets, and then splits the data at the commas.
+                    */
+                    //if (Line.StartsWith("resourcePacks"))
+                    if (!string.IsNullOrEmpty((LineSplits = Line.StartsWith("resourcePacks") ? Line.Split(':')[1].Trim(RemoveChars).Split(',') : null)?[0]))
+                    {
+                        //foreach(string LineSegment in Line.Split(':')[1].Trim(RemoveChars).Split(','))
+                        foreach (string LineSegment in LineSplits)
+                        {
+                            yield return LineSegment.Contains('/') ? LineSegment.Split('/')[1].Trim('"') : @"JAR\" + LineSegment.Trim('"');
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     public class Block
@@ -255,31 +280,29 @@ namespace BlockRenderTest
     public class BlockState
     {
         public string Name;
-        public List<Model> Models = new List<Model>();
+        public List<ModelReference> Models = new List<ModelReference>();
 
-        public IList<object> variants;
-        public IDictionary<string, List<Model>> Variants;
-
-        public void AddVariant(string Name, List<Model> InputModel)
-        {
-            Variants.Add(Name, InputModel);
-        }
-
-        public BlockState(string BlockStateName, List<Model> BlockStateModels)
+        public BlockState(string BlockStateName, List<ModelReference> BlockStateModels)
         {
             Name = BlockStateName;
             Models = BlockStateModels;
         }
     }
 
-    public class Model
+    public class ModelReference
     {
-        public string Name;
         public string Path;
 
-        public Model(string ModelPath)
+        public ModelReference(string ModelPath)
         {
             Path = ModelPath;
         }
+    }
+
+    public class BlockModel
+    {
+        public string Name;
+        public string Parent;
+        public Dictionary<string, Image> Textures;
     }
 }
