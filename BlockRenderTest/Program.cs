@@ -91,10 +91,10 @@ namespace BlockRenderTest
                     }
                 }
                 //This list has to be declared outside of the using block so that it can be referenced later
-                List<Block> Blocks = new List<Block>();
-                List<Block> PackBlocks = new List<Block>();
+                Dictionary<string, Block> Blocks = new Dictionary<string, Block>();
                 foreach (ResourcePack Pack in ResourcePacks)
                 {
+                    List<Block> PackBlocks = new List<Block>();
                     switch (Pack.Type)
                     {
                         case ResourcePack.PackType.Mod:
@@ -105,166 +105,62 @@ namespace BlockRenderTest
                                 IEnumerable<ZipArchiveEntry> BlockStateEntries = ZipFolder.Entries.Where(Entry => Entry.Name.EndsWith(".json") && Entry.FullName.EndsWith(@"blockstates/" + Entry.Name));
                                 foreach (ZipArchiveEntry Entry in BlockStateEntries)
                                 {
-                                    /*
-                                    This whole section is just a tangled mess to parse the blockstate JSON files.
-
-                                    Rather than even try to parse the JSON myself with string operators (cancer),
-                                    I decided to use an external function library.
-                                    */
-                                    List<BlockState> BlockStates = new List<BlockState>();          //Generate the lists
-                                    List<ModelReference> ModelList = new List<ModelReference>();    //before using them
-                                    Dictionary<string, string> ModelDictionary = new Dictionary<string, string>();
-                                    using (StreamReader sr = new StreamReader(Entry.Open()))
+                                    try
                                     {
-                                        try
-                                        {
-                                            JObject JsonOutput = JObject.Parse(sr.ReadToEnd());
-                                            foreach (KeyValuePair<string, JToken> Token in JsonOutput)
-                                            {
-                                                if (Token.Key == "variants")
-                                                {
-                                                    BlockStates = new List<BlockState>();
-                                                    foreach (JToken Variants in Token.Value)
-                                                    {
-                                                        foreach (JToken StateToken in Variants.Values<JToken>())
-                                                        {
-                                                            ModelList = new List<ModelReference>();
-                                                            ModelDictionary = new Dictionary<string, string>();
-                                                            foreach (JToken ModelToken in StateToken.Children())
-                                                            {
-                                                                ModelDictionary.Add(ModelToken.ToObject<JProperty>().Name, ModelToken.ToObject<string>());
-                                                            }
-                                                            ModelList.Add(new ModelReference(ModelDictionary));
-                                                            BlockStates.Add(new BlockState(Variants.ToObject<JProperty>().Name, ModelList));
-                                                        }
-                                                    }
-                                                    PackBlocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
-                                                }
-                                            }
-                                        }
-                                        catch
-                                        {
-                                            /*
-                                            For some reason Mojang has a crappy blockstate for acacia_wall_sign.
-                                            It has a random 'n' after all the data, which gives my code AIDS
-                                            unless I put it all in a try/catch. :P
-                                            */
-                                        }
+                                        PackBlocks.Add(new Block(Entry.Name.Split('.')[0], GetBlockData(Entry.Open())));
+                                    }
+                                    catch
+                                    {
+                                        /*
+                                        For some reason Mojang has a crappy blockstate for acacia_wall_sign.
+                                        It has a random 'n' after all the data, which gives my code AIDS
+                                        unless I put it all in a try/catch. :P
+                                        */
                                     }
                                 }
                             }
                             break;
                         case ResourcePack.PackType.Folder:
+                            string AssetsPath = Pack.Path + @"\assets";
+                            string BlockStatesPath;
+                            if (Directory.Exists(AssetsPath))
+                            {
+                                foreach(string Namespace in Directory.GetDirectories(AssetsPath))
+                                {
+                                    Console.Write("");
+                                    BlockStatesPath = Namespace + @"\blockstates";
+                                    if (Directory.Exists(BlockStatesPath))
+                                    {
+                                        foreach (string BlockStateFile in Directory.GetFiles(BlockStatesPath))
+                                        {
+                                            using (StreamReader sr = new StreamReader(BlockStateFile))
+                                            {
+                                                try
+                                                {
+                                                    PackBlocks.Add(new Block(BlockStateFile.Split('\\').Reverse().ToArray()[0].Split('.')[0], GetBlockData(sr.BaseStream)));
+                                                    Console.Write("");
+                                                }
+                                                catch
+                                                {
 
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             break;
                         default:
                             break;
                     }
+                    Console.Write("");
                     foreach (Block block in PackBlocks)
                     {
-
+                        Blocks[block.Name] = block;
                     }
                 }
 
-
-                    //using (ZipArchive MinecraftJar = ZipFile.OpenRead(MinecraftJarPath))
-                    //{
-                    //    IEnumerable<ZipArchiveEntry> BlockStateEntries = MinecraftJar.Entries.Where(Entry => (Entry.Name.EndsWith(".json")) && (Entry.FullName.EndsWith(@"minecraft/blockstates/" + Entry.Name)));
-                    //    foreach (ZipArchiveEntry Entry in BlockStateEntries)
-                    //    {
-                    //        /*
-                    //        This whole section is just a tangled mess to parse the blockstate JSON files.
-
-                    //        Rather than even try to parse the JSON myself with string operators (cancer),
-                    //        I decided to use an external function library.
-                    //        */
-                    //        List<BlockState> BlockStates = new List<BlockState>();          //Generate the lists
-                    //        List<ModelReference> ModelList = new List<ModelReference>();    //before using them
-                    //        Dictionary<string, string> ModelDictionary = new Dictionary<string, string>();
-                    //        using (StreamReader sr = new StreamReader(Entry.Open()))
-                    //        {
-                    //            try
-                    //            {
-                    //                JObject JsonOutput = JObject.Parse(sr.ReadToEnd());
-                    //                foreach (KeyValuePair<string, JToken> Token in JsonOutput)
-                    //                {
-                    //                    if (Token.Key == "variants")
-                    //                    {
-                    //                        BlockStates = new List<BlockState>();
-                    //                        foreach (JToken Variants in Token.Value)
-                    //                        {
-                    //                            foreach (JToken StateToken in Variants.Values<JToken>())
-                    //                            {
-                    //                                ModelList = new List<ModelReference>();
-                    //                                ModelDictionary = new Dictionary<string, string>();
-                    //                                foreach (JToken ModelToken in StateToken.Children())
-                    //                                {
-                    //                                    ModelDictionary.Add(ModelToken.ToObject<JProperty>().Name, ModelToken.ToObject<string>());
-                    //                                }
-                    //                                ModelList.Add(new ModelReference(ModelDictionary));
-                    //                                BlockStates.Add(new BlockState(Variants.ToObject<JProperty>().Name, ModelList));
-                    //                            }
-                    //                        }
-                    //                        Blocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
-                    //                    }
-                    //                }
-                    //            }
-                    //            catch
-                    //            {
-                    //                /*
-                    //                For some reason Mojang has a crappy blockstate for acacia_wall_sign.
-                    //                It has a random 'n' after all the data, which gives my code AIDS
-                    //                unless I put it all in a try/catch. :P
-                    //                */
-                    //            }
-                    //        }
-                    //    }
-
-                    //    foreach(ResourcePack Pack in ResourcePacks)
-                    //    {
-                    //        switch(Pack.Type)
-                    //        {
-                    //            case ResourcePack.PackType.Mod:
-                    //            case ResourcePack.PackType.Jar:
-                    //            case ResourcePack.PackType.Zip:
-
-                    //                break;
-                    //            case ResourcePack.PackType.Folder:
-
-                    //                break;
-                    //            default:
-                    //                break;
-                    //        }
-                    //    }
-
-                    //    List<ZipArchiveEntry> BlockModelEntries = new List<ZipArchiveEntry>();
-
-                    //    foreach (Block block in Blocks)
-                    //    {
-                    //        BlockModelEntries.Add(MinecraftJar.GetEntry("assets/minecraft/models/" + block.BlockStates[0].Models[0].Path + ".json"));
-                    //    }
-
-                    //    BlockModelEntries = BlockModelEntries.Distinct().ToList();
-
-                    //    List<BlockModel> BlockModels = new List<BlockModel>();
-
-                    //    foreach (ZipArchiveEntry Entry in BlockModelEntries)
-                    //    {
-
-                    //    }
-
-
-                    //    Console.Write("");
-
-                    //    //IEnumerable<ZipArchiveEntry> BlockModelEntries = MinecraftJar.Entries.Where(Entry => (Entry.Name.EndsWith(".json")) && (Entry.FullName.EndsWith(@"minecraft/models/block/" + Entry.Name)));
-                    //    //foreach (ZipArchiveEntry Entry in BlockModelEntries)
-                    //    //{
-
-                    //    //}
-
-                    //}
-
-                    foreach (Block block in Blocks)
+                foreach (Block block in Blocks.Values)
                 {
                     Console.WriteLine(block.Name);
                     foreach (BlockState State in block.BlockStates)
@@ -272,7 +168,7 @@ namespace BlockRenderTest
                         Console.WriteLine(State.Name);
                         foreach (ModelReference Model in State.Models)
                         {
-                            Console.WriteLine(Model.Path);
+                            Console.WriteLine(Model.ModelData["model"]);
                         }
                     }
                 }
@@ -297,6 +193,50 @@ namespace BlockRenderTest
             //{
                 
             //}
+        }
+
+        static List<BlockState> GetBlockData(Stream InputStream)
+        {
+            /*
+            This whole section is just a tangled mess to parse the blockstate JSON files.
+
+            Rather than even try to parse the JSON myself with string operators (cancer),
+            I decided to use an external function library.
+             */
+            List<BlockState> BlockStates = new List<BlockState>();          //Generate the lists
+            List<ModelReference> ModelList = new List<ModelReference>();    //before using them
+            Dictionary<string, string> ModelDictionary = new Dictionary<string, string>();
+            using (StreamReader sr = new StreamReader(InputStream))
+            {
+                JObject JsonOutput = JObject.Parse(sr.ReadToEnd());
+                foreach (KeyValuePair<string, JToken> Token in JsonOutput)
+                {
+                    if (Token.Key == "variants")
+                    {
+                        BlockStates = new List<BlockState>();
+                        foreach (JToken Variants in Token.Value)
+                        {
+                            foreach (JToken StateToken in Variants.Values<JToken>())
+                            {
+                                ModelList = new List<ModelReference>();
+                                ModelDictionary = new Dictionary<string, string>();
+                                foreach (JToken ModelToken in StateToken.Children())
+                                {
+                                    ModelDictionary.Add(ModelToken.ToObject<JProperty>().Name, ModelToken.ToObject<string>());
+                                }
+                                ModelList.Add(new ModelReference(ModelDictionary));
+                                BlockStates.Add(new BlockState(Variants.ToObject<JProperty>().Name, ModelList));
+                            }
+                        }
+                        //PackBlocks.Add(new Block(Entry.Name.Split('.')[0], BlockStates));
+                    }
+                    else
+                    {
+                        throw new TrashMonkeyException("Model is multipart!");
+                    }
+                }
+            }
+            return BlockStates;
         }
 
         static void GetBlockStates(string PathInput)
@@ -376,7 +316,7 @@ namespace BlockRenderTest
 
                 foreach (Block block in Blocks)
                 {
-                    BlockModelEntries.Add(MinecraftJar.GetEntry("assets/minecraft/models/" + block.BlockStates[0].Models[0].Path + ".json"));
+                    BlockModelEntries.Add(MinecraftJar.GetEntry("assets/minecraft/models/" + block.BlockStates[0].Models[0].ModelData["model"] + ".json"));
                 }
 
                 BlockModelEntries = BlockModelEntries.Distinct().ToList();
